@@ -55,9 +55,10 @@ def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-
 
 
 # 获取某个开发者过去7天代码变动量
-def get_git_linechange_last_ndays(author, ndays=7):
+def get_git_linechange_last_ndays(author, ndays=6):
     now = datetime.date.today()
     ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
+    print('起始日期：'+ndaysago)
     num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --author=%s' % (ndaysago,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
 
     numL = num.split('\n')
@@ -91,7 +92,20 @@ def getlastndays(ndays, date=datetime.datetime.now().strftime('%Y-%m-%d')):
         today -= oneday
         lastdays.append(today.strftime('%Y-%m-%d'))
     lastdays.sort()
+
     return lastdays
+
+
+# 获取过去N周的日期列表，按自然日排序
+def getlastnweeks_begindate(nweek=5, currentday=datetime.datetime.now()):
+    sevenday = datetime.timedelta(days=6)
+    lastnweeks_begindate = []
+    for n in range(nweek):
+        currentday -=sevenday
+        lastnweeks_begindate.append(currentday.strftime('%Y-%m-%d'))
+    lastnweeks_begindate.sort()
+
+    return lastnweeks_begindate
 
 
 # 从git上获取过去N天的累计代码量
@@ -103,6 +117,41 @@ def get_git_linesum_perdays(ndays):
     return lastdays,curr_line_nums
 
 
+# 从git上获取某个开发者过去N周的代码变化量
+def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
+    linesum_oneauthor_since_nweek_add = []
+    linesum_oneauthor_since_nweek_sub = []
+    linesum_oneauthor_since_nweek_loc = []
+
+
+    for sincedate in weekbegindates:
+        untildate = datetime.datetime.strptime(sincedate, '%Y-%m-%d') + datetime.timedelta(days=6)
+        print("sincedate:" + sincedate + "untildate:" + untildate.strftime('%Y-%m-%d'))
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author=%s' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
+                            'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
+        numL = num.split('\n')
+        if not num:
+            numL = [0, 0, 0]
+        num_list = {}
+        if not numL[0]:
+            num_list['add'] = 0
+        else:
+            num_list['add'] = int(numL[0])
+        if not numL[1]:
+            num_list['sub'] = 0
+        else:
+            num_list['sub'] = int(numL[1])
+        if not numL[2]:
+            num_list['loc'] = 0
+        else:
+            num_list['loc'] = int(numL[2])
+
+        linesum_oneauthor_since_nweek_add.append(num_list['add'])
+        linesum_oneauthor_since_nweek_sub.append((num_list['sub']))
+        linesum_oneauthor_since_nweek_loc.append((num_list['loc']))
+
+    return linesum_oneauthor_since_nweek_add ,linesum_oneauthor_since_nweek_sub,linesum_oneauthor_since_nweek_loc
+
 # 返回开发者代码量
 def get_git_linesum_oneauthor(author_name):
     # 查找开发者
@@ -110,6 +159,28 @@ def get_git_linesum_oneauthor(author_name):
     if not linesum or int(linesum) <= 0:
         linesum = 0
     return int(linesum)
+
+
+# 自动在当前路径下执行强制Merge更新到最新版本
+def git_autogitpull():
+    print(getpipoutput(['git pull']))
+
+
+# 查找工程下的开发者，重复的进行合并
+def git_fundauthors(paths):
+    author_names = []
+
+    for path in paths:
+        os.chdir(path)
+        #查找开发者
+        output = getpipoutput(['git shortlog -s'])
+        for line in output.split('\n'):
+            parts = line.split('\t')
+            author_name = parts[1]
+            if author_name not in author_names:
+                author_names.append(author_name)
+
+    return author_names
 
 
 # 饼图标签显示内容设置
@@ -185,7 +256,7 @@ def img_ploylinedata(labels, datas, title='代码趋势图'):
 
 
 # 根据数据形成最近7天代码变化柱状图
-def img_cubedata_3bar(labels, values1, values2, values3, xlabel='开发者', ylabel='代码量', title="最近7日代码变化"):
+def img_cubedata_3bar(labels, values1, values2, values3, filename ,xlabel='开发者', ylabel='代码量', title="最近7日代码变化"):
     fig, ax = plt.subplots(figsize=(16, 8))
     n_groups = len(labels)
     index = np.arange(n_groups)
@@ -210,26 +281,31 @@ def img_cubedata_3bar(labels, values1, values2, values3, xlabel='开发者', yla
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
-    plt.savefig(get_resultpath() + '/daily_change_line.png')
+    plt.savefig(get_resultpath() + '/'+filename+'.png')
     plt.close()
 
 
 # 生成结果报告
-def gen_reporthtml(gitpaths, updatecode=True):
+def gen_reporthtml(gitpaths):
     GEN_HTML = "/index.html"
-    resultpath = get_resultpath()
     f = open(get_resultpath() + GEN_HTML, 'w')
-    gitdata = GitDataCollector()
-    gitdata.initMeta(gitpaths)
 
-    for gitpath in gitpaths:
-        print('Start Collecting : %s' % gitpath)
-        os.chdir(gitpath)
-        if updatecode:
-            autogitpull()
-        gitdata.collect(gitpath)
-
+    gitdata = GitDataCollector(gitpaths)
+    gitdata.collect_all()
     gitdata.drawimg()
+
+    showpath = ''
+    for p in gitdata.gitpaths:
+        showpath += p
+        showpath += '<br>'
+
+    print(gitdata.oneauthor_lastweeks_linesums_add)
+    print(gitdata.oneauthor_lastweeks_linesums_sub)
+    print(gitdata.oneauthor_lastweeks_linesums_loc)
+
+    every_author_message = ''
+    for au in gitdata.authors:
+        every_author_message +='<p><img src="'+au+'_weekchange.png"></p>'
 
     message = """
     <html>
@@ -239,11 +315,12 @@ def gen_reporthtml(gitpaths, updatecode=True):
     <p>开发者人数：%s</p>
     <p>代码总行数：%s</p>
     <p>最近7日代码变化：<img src="daily_change_line.png"> </img></p>
+    %s
     <p>代码分布饼图：<img src="author_pie.png"> </img></p>
     <p>代码分布柱状图：<img src="author_cube.png"> </img></p>
     <p>代码日趋势：<img src="daily_line.png"> </img></p>
     </body>
-    </html>""" % (gitdata.gitpaths, gitdata.total_authornum, gitdata.total_line)
+    </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line,every_author_message)
 
     # 写入文件
     f.write(message)
@@ -253,61 +330,51 @@ def gen_reporthtml(gitpaths, updatecode=True):
     # 运行完自动在网页中显示
     webbrowser.open(get_resultpath() + GEN_HTML, new=1)
 
-
-# 自动在当前路径下执行强制Merge更新到最新版本
-def autogitpull():
-    print(getpipoutput(['git pull']))
-
-
-# 查找工程下的开发者，重复的进行合并
-def git_fundauthors(paths):
-    author_names = []
-
-    for path in paths:
-        os.chdir(path)
-        #查找开发者
-        output = getpipoutput(['git shortlog -s'])
-        for line in output.split('\n'):
-            parts = line.split('\t')
-            author_name = parts[1]
-            if author_name not in author_names:
-                author_names.append(author_name)
-
-    return author_names
-
-
 # git工程数据收集器
 class GitDataCollector():
-    def __init__(self):
-        # git工程开发者合计数
-        self.total_authornum = 0
+    def __init__(self, paths):
         # git工程合计代码行数
         self.total_line = 0
-        # git工程开发者编码集合
-        self.authors = []
-        # git工程开发者代码行数，顺序与开发者编码一致
-        self.authorlines = []
+        # 过去两周日期
         self.last14days = getlastndays(14)
         # 过去2周每日代码量
         self.last14days_num = [0 for x in range(14)]
-
-        # 过去七天增减,按照200开发人员来初始化
-        self.author_adds_last7days = []
-        self.author_subs_last7days = []
-        self.author_loc_last7days = []
-        self.gitpaths = []
-
-    def initMeta(self, paths):
         self.gitpaths = paths
+        # git工程开发者编码集合
         self.authors = git_fundauthors(paths)
+        # git工程开发者合计数
         self.total_authornum = len(self.authors)
+        # 过去七天增减,按照200开发人员来初始化
         self.author_adds_last7days = [0 for x in range(len(self.authors))]
         self.author_subs_last7days = [0 for x in range(len(self.authors))]
         self.author_loc_last7days =  [0 for x in range(len(self.authors))]
+        # git工程开发者代码行数，顺序与开发者编码一致
         self.authorlines = [0 for x in range(self.total_authornum)]
 
-    # 数据收集
-    def collect(self,dir):
+        # 往前N周起始日期组
+        self.lastnweeks_begindates = getlastnweeks_begindate()
+
+        self.oneauthor_lastweeks_linesums_add = {}
+        self.oneauthor_lastweeks_linesums_sub = {}
+        self.oneauthor_lastweeks_linesums_loc = {}
+
+        for au in self.authors:
+            self.oneauthor_lastweeks_linesums_add[au]=[0 for x in range(5)]
+            self.oneauthor_lastweeks_linesums_sub[au] = [0 for x in range(5)]
+            self.oneauthor_lastweeks_linesums_loc[au] = [0 for x in range(5)]
+
+    # 收集git数据
+    def collect_all(self, pullcode=True):
+        for gitpath in self.gitpaths:
+            print('Start Collecting : %s' % gitpath)
+            os.chdir(gitpath)
+            if pullcode:
+                git_autogitpull()
+            self.collect(gitpath)
+
+
+    #  数据收集
+    def collect(self, dir):
         self.total_line += int(get_git_linesum_until_somedate())
 
         for i, au in enumerate(self.authors):
@@ -317,6 +384,13 @@ class GitDataCollector():
             self.author_subs_last7days[i] += num_list['sub']
             self.author_loc_last7days[i] += num_list['loc']
 
+            linesum_oneauthor_since_nweek_add,linesum_oneauthor_since_nweek_sub,linesum_oneauthor_since_nweek_loc = get_git_linesum_oneauthor_since_nweek(au,self.lastnweeks_begindates)
+            for x in range(5):
+                self.oneauthor_lastweeks_linesums_add[au][x] += linesum_oneauthor_since_nweek_add[x]
+                self.oneauthor_lastweeks_linesums_sub[au][x] += linesum_oneauthor_since_nweek_sub[x]
+                self.oneauthor_lastweeks_linesums_loc[au][x] += linesum_oneauthor_since_nweek_loc[x]
+
+
         for i in range(14):
             self.last14days_num[i] += int(get_git_linesum_until_somedate(self.last14days[i]))
 
@@ -325,7 +399,18 @@ class GitDataCollector():
         img_piedata(self.authors, self.authorlines, '开发人员代码行数比例')
         img_cubedata_horizontal(self.authors, self.authorlines, '开发人员代码行数对比')
         img_ploylinedata(self.last14days, self.last14days_num, 'GIT工程代码趋势图')
-        img_cubedata_3bar(labels=self.authors, values1=self.author_adds_last7days, values2=self.author_subs_last7days, values3=self.author_loc_last7days)
+        img_cubedata_3bar(labels=self.authors,
+                          values1=self.author_adds_last7days,
+                          values2=self.author_subs_last7days,
+                          values3=self.author_loc_last7days,
+                          filename='daily_change_line')
+        for au in self.authors:
+            img_cubedata_3bar(labels=self.lastnweeks_begindates,
+                              values1=self.oneauthor_lastweeks_linesums_add[au],
+                              values2=self.oneauthor_lastweeks_linesums_sub[au],
+                              values3=self.oneauthor_lastweeks_linesums_loc[au],
+                              filename=au+'_weekchange',
+                              title=au +'最近5周代码变动量')
 
 
 gitpaths = ['C:\eclipse4SpringCloud\lyfen-partner-platform',
@@ -333,5 +418,5 @@ gitpaths = ['C:\eclipse4SpringCloud\lyfen-partner-platform',
             'C:\eclipse4SpringCloud_WorkSpace\lyfen',
             'C:\eclipse4SpringCloud_WorkSpace\zhongtai']
 
-gen_reporthtml(gitpaths, False)
+gen_reporthtml(gitpaths)
 
