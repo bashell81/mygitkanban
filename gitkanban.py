@@ -58,7 +58,7 @@ def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-
 def get_git_linechange_last_ndays(author, ndays=6):
     now = datetime.date.today()
     ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
-    print('起始日期：'+ndaysago)
+
     num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --author=%s' % (ndaysago,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
 
     numL = num.split('\n')
@@ -123,10 +123,9 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
     linesum_oneauthor_since_nweek_sub = []
     linesum_oneauthor_since_nweek_loc = []
 
-
     for sincedate in weekbegindates:
         untildate = datetime.datetime.strptime(sincedate, '%Y-%m-%d') + datetime.timedelta(days=6)
-        print("sincedate:" + sincedate + "untildate:" + untildate.strftime('%Y-%m-%d'))
+        #print("sincedate:" + sincedate + "untildate:" + untildate.strftime('%Y-%m-%d'))
         num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author=%s' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
@@ -163,6 +162,7 @@ def get_git_linesum_oneauthor(author_name):
 
 # 自动在当前路径下执行强制Merge更新到最新版本
 def git_autogitpull():
+    print('开始获取GIT最新代码...')
     print(getpipoutput(['git pull']))
 
 
@@ -242,7 +242,6 @@ def img_cubedata_horizontal(labels, datas, title='柱状图'):
 def img_ploylinedata(labels, datas, title='代码趋势图'):
     fig, ax = plt.subplots(figsize=(16, 8))
     ax.plot(labels, datas)
-
     ax.grid(True, linestyle='-.')
     ax.tick_params(labelcolor='r', labelsize='medium', width=3)
     ax.set_title(title)
@@ -263,7 +262,7 @@ def img_cubedata_3bar(labels, values1, values2, values3, filename ,xlabel='开�
 
     bar_width = 0.2
     opacity = 0.4
-    print(values1)
+
     rects1 = ax.bar(index, values1, bar_width,
                     alpha=opacity, color='b',
                     label='新增')
@@ -277,7 +276,6 @@ def img_cubedata_3bar(labels, values1, values2, values3, filename ,xlabel='开�
     ax.set_xticklabels(labels)
     ax.legend()
     ax.set_title(title)
-
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
@@ -294,14 +292,11 @@ def gen_reporthtml(gitpaths):
     gitdata.collect_all()
     gitdata.drawimg()
 
+    #根据开发者动态生成每个开发者近5周画像
     showpath = ''
     for p in gitdata.gitpaths:
         showpath += p
         showpath += '<br>'
-
-    print(gitdata.oneauthor_lastweeks_linesums_add)
-    print(gitdata.oneauthor_lastweeks_linesums_sub)
-    print(gitdata.oneauthor_lastweeks_linesums_loc)
 
     every_author_message = ''
     for au in gitdata.authors:
@@ -320,7 +315,7 @@ def gen_reporthtml(gitpaths):
     <p>代码分布柱状图：<img src="author_cube.png"> </img></p>
     <p>代码日趋势：<img src="daily_line.png"> </img></p>
     </body>
-    </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line,every_author_message)
+    </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line, every_author_message)
 
     # 写入文件
     f.write(message)
@@ -329,6 +324,7 @@ def gen_reporthtml(gitpaths):
 
     # 运行完自动在网页中显示
     webbrowser.open(get_resultpath() + GEN_HTML, new=1)
+
 
 # git工程数据收集器
 class GitDataCollector():
@@ -359,7 +355,7 @@ class GitDataCollector():
         self.oneauthor_lastweeks_linesums_loc = {}
 
         for au in self.authors:
-            self.oneauthor_lastweeks_linesums_add[au]=[0 for x in range(5)]
+            self.oneauthor_lastweeks_linesums_add[au] = [0 for x in range(5)]
             self.oneauthor_lastweeks_linesums_sub[au] = [0 for x in range(5)]
             self.oneauthor_lastweeks_linesums_loc[au] = [0 for x in range(5)]
 
@@ -413,10 +409,14 @@ class GitDataCollector():
                               title=au +'最近5周代码变动量')
 
 
-gitpaths = ['C:\eclipse4SpringCloud\lyfen-partner-platform',
-            'C:\eclipse4SpringCloud_WorkSpace\yonyou-cloud-platform',
-            'C:\eclipse4SpringCloud_WorkSpace\lyfen',
-            'C:\eclipse4SpringCloud_WorkSpace\zhongtai']
+#gitpaths = ['C:\eclipse4SpringCloud\lyfen-partner-platform',
+   #         'C:\eclipse4SpringCloud_WorkSpace\yonyou-cloud-platform',
+   #         'C:\eclipse4SpringCloud_WorkSpace\lyfen',
+    #        'C:\eclipse4SpringCloud_WorkSpace\zhongtai']
+
+#gitmofang = ['C:\eclipse4SpringCloud_WorkSpace\\financial-center-service','C:\eclipse4SpringCloud_WorkSpace\\financialcenterserviceweb']
+
+gitpaths = input("Enter GIT Path(Split by , ):").split(',')
 
 gen_reporthtml(gitpaths)
 
