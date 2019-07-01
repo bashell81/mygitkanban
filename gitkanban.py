@@ -409,14 +409,11 @@ class GitDataCollector():
                               title=au +'最近5周代码变动量')
 
 
-#gitpaths = ['C:\eclipse4SpringCloud\lyfen-partner-platform',
-   #         'C:\eclipse4SpringCloud_WorkSpace\yonyou-cloud-platform',
-   #         'C:\eclipse4SpringCloud_WorkSpace\lyfen',
-    #        'C:\eclipse4SpringCloud_WorkSpace\zhongtai']
 
 #gitmofang = ['C:\eclipse4SpringCloud_WorkSpace\\financial-center-service','C:\eclipse4SpringCloud_WorkSpace\\financialcenterserviceweb']
 
 gitpaths = input("Enter GIT Path(Split by , ):").split(',')
 
 gen_reporthtml(gitpaths)
+
 
