@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import webbrowser
+import io
 
 # 获取当前平台的操作系统类型
 ON_LINUX = (platform.system() == 'Linux')
@@ -20,6 +21,8 @@ def getpipoutput(cmds, quiet=False):
         print
         '>> ' + ' | '.join(cmds),
         sys.stdout.flush()
+
+    print(cmds)
 
     child = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
     processes = [child]
@@ -191,6 +194,7 @@ def img_annotation(pct, allvals):
 
 # 按照输入数据饼图形式展示
 def img_piedata(labels, datas, title='饼状图'):
+
     # plt.subplots定义画布和图型；figsize设置画布尺寸；aspect="equal"设置坐标轴的方正
     fig, ax = plt.subplots(figsize=(16, 8), subplot_kw=dict(aspect="equal"))
 
@@ -223,6 +227,7 @@ def img_piedata(labels, datas, title='饼状图'):
 
 # 根据输入数据形成柱状图
 def img_cubedata_horizontal(labels, datas, title='柱状图'):
+
     plt.rcdefaults()
     fig, ax = plt.subplots(figsize=(16, 8))
     y_pos = np.arange(len(labels))
@@ -255,7 +260,12 @@ def img_ploylinedata(labels, datas, title='代码趋势图'):
 
 
 # 根据数据形成最近7天代码变化柱状图
-def img_cubedata_3bar(labels, values1, values2, values3, filename ,xlabel='开发者', ylabel='代码量', title="最近7日代码变化"):
+def img_cubedata_3bar(labels, values1, values2, values3, filename ,filterzero=False,xlabel='开发者', ylabel='代码量', title="最近7日代码变化" ):
+    if filterzero :
+        labels, values1, values2, values3 = filterzerodata4Three(labels, values1, values2, values3)
+    if not labels:
+        return
+
     fig, ax = plt.subplots(figsize=(16, 8))
     n_groups = len(labels)
     index = np.arange(n_groups)
@@ -284,12 +294,12 @@ def img_cubedata_3bar(labels, values1, values2, values3, filename ,xlabel='开�
 
 
 # 生成结果报告
-def gen_reporthtml(gitpaths):
+def gen_reporthtml(gitpaths,pull=True):
     GEN_HTML = "/index.html"
     f = open(get_resultpath() + GEN_HTML, 'w')
 
     gitdata = GitDataCollector(gitpaths)
-    gitdata.collect_all()
+    gitdata.collect_all(pull)
     gitdata.drawimg()
 
     #根据开发者动态生成每个开发者近5周画像
@@ -317,6 +327,10 @@ def gen_reporthtml(gitpaths):
     </body>
     </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line, every_author_message)
 
+    # 改变标准输出的默认编码
+    # utf-8中文乱码
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
+
     # 写入文件
     f.write(message)
     # 关闭文件
@@ -325,6 +339,50 @@ def gen_reporthtml(gitpaths):
     # 运行完自动在网页中显示
     webbrowser.open(get_resultpath() + GEN_HTML, new=1)
 
+
+#去掉值全为0的开发者
+def filterdata4One(keys,values):
+    r_keys = []
+    r_values = []
+    for i , key in enumerate(keys):
+        if  values[i] == 0:
+            pass
+        else:
+            r_keys.append(key)
+            r_values.append(values[i])
+    return r_keys,r_values
+
+
+#去掉值全为0的开发者
+def filterdata4Two(keys,values1,values2):
+    r_keys = []
+    r_values1 = []
+    r_values2 = []
+    for i,key in enumerate(keys):
+        if  values1[i]== 0 and values2[i]== 0:
+            pass
+        else:
+            r_keys.append(key)
+            r_values1.append(values1[i])
+            r_values2.append(values2[i])
+    return r_keys, r_values1, r_values2
+
+
+#去掉值全为0的开发者
+def filterzerodata4Three(keys,values1,values2,values3):
+    r_keys = []
+    r_values1 = []
+    r_values2 = []
+    r_values3 = []
+    for i,key in enumerate(keys):
+        if values1[i]==0 and values2[i]==0 and values3[i]==0:
+            pass
+        else:
+            r_keys.append(key)
+            r_values1.append(values1[i])
+            r_values2.append(values2[i])
+            r_values3.append(values3[i])
+    return r_keys,r_values1,r_values2,r_values3
 
 # git工程数据收集器
 class GitDataCollector():
@@ -399,6 +457,7 @@ class GitDataCollector():
                           values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
                           values3=self.author_loc_last7days,
+                          filterzero = True,
                           filename='daily_change_line')
         for au in self.authors:
             img_cubedata_3bar(labels=self.lastnweeks_begindates,
@@ -414,6 +473,8 @@ class GitDataCollector():
 
 gitpaths = input("Enter GIT Path(Split by , ):").split(',')
 
-gen_reporthtml(gitpaths)
+p = input("pull code ? (Y/N):")
+
+gen_reporthtml(gitpaths,True if p=='Y' else False)
 
 
