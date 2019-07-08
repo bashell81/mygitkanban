@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import webbrowser
+import collections
 import io
 
 # 获取当前平台的操作系统类型
@@ -38,6 +39,7 @@ def getpipoutput(cmds, quiet=False):
     # 此处是由于Python3返回字节集合需要通过转码变为字符串输出
     return output.decode('utf-8').rstrip('\n')
 
+
 # 获得生成结果页面的文件夹绝对路径，如果不存在则创建一个
 def get_resultpath():
     if os.path.exists(PATH_RESULT) == False:
@@ -48,6 +50,31 @@ def get_resultpath():
 def get_git_author_number():
     return int(getpipoutput(['git shortlog -s ', 'wc -l']))
 
+
+# 遍历目录下所有文件，返回目录下git修改文件次数字典
+def get_git_changetime_onefile(dir,topn=19):
+
+    dict4change = collections.OrderedDict()
+    for root, dirs, files in os.walk(dir):
+        os.chdir(root)
+        for file in files:
+            abspath = root + file
+            if '.git' in abspath:
+                continue
+            num = getpipoutput(['git log --pretty=oneline %s' %file,'wc -l'])
+
+            dict4change[abspath] = int(num)
+    d = list(zip(dict4change.values(), dict4change.keys()))
+    d = sorted(d,reverse=True)
+
+    retdict = collections.OrderedDict()
+    # 返回Top 10
+    for keyAndValue in d:
+        retdict[keyAndValue[1]] = keyAndValue[0]
+        if len(retdict) > topn:
+            break
+
+    return retdict
 
 # 获取某日累计代码量
 def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-%d')):
@@ -296,7 +323,7 @@ def img_cubedata_3bar(labels, values1, values2, values3, filename ,filterzero=Fa
 # 生成结果报告
 def gen_reporthtml(gitpaths,pull=True):
     GEN_HTML = "/index.html"
-    f = open(get_resultpath() + GEN_HTML, 'w')
+    f = open(get_resultpath() + GEN_HTML, 'w', encoding='gb18030')
 
     gitdata = GitDataCollector(gitpaths)
     gitdata.collect_all(pull)
@@ -304,9 +331,18 @@ def gen_reporthtml(gitpaths,pull=True):
 
     #根据开发者动态生成每个开发者近5周画像
     showpath = ''
+
+    showMaxChangeFileAll = ''
     for p in gitdata.gitpaths:
+        title = '<p>工程路径:'+p +'</p>'
+        showMaxChangeFile = title +'<table><tr><td>文件路径</td><td>提交次数Top20</td></tr>'
         showpath += p
         showpath += '<br>'
+        changedict = get_git_changetime_onefile(p)
+        for key,value in changedict.items():
+            showMaxChangeFile += '<tr><td>'+str(key)+'</td><td>'+str(value)+'</td></tr>'
+        showMaxChangeFile = showMaxChangeFile + '</table>'
+        showMaxChangeFileAll += showMaxChangeFile
 
     every_author_message = ''
     for au in gitdata.authors:
@@ -324,12 +360,13 @@ def gen_reporthtml(gitpaths,pull=True):
     <p>代码分布饼图：<img src="author_pie.png"> </img></p>
     <p>代码分布柱状图：<img src="author_cube.png"> </img></p>
     <p>代码日趋势：<img src="daily_line.png"> </img></p>
+    <p>文件更新(TOP20建议做代码分析)：%s</p>
     </body>
-    </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line, every_author_message)
+    </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line, every_author_message,showMaxChangeFileAll)
 
     # 改变标准输出的默认编码
     # utf-8中文乱码
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
+    #sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
 
     # 写入文件
     f.write(message)
@@ -476,5 +513,7 @@ gitpaths = input("Enter GIT Path(Split by , ):").split(',')
 p = input("pull code ? (Y/N):")
 
 gen_reporthtml(gitpaths,True if p=='Y' else False)
+
+#get_git_changetime_onefile('C:\eclipse4SpringCloud_WorkSpace\\financial-center-service')
 
 
