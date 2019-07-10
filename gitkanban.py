@@ -58,7 +58,7 @@ def get_git_changetime_onefile(dir,topn=19):
     for root, dirs, files in os.walk(dir):
         os.chdir(root)
         for file in files:
-            abspath = root + file
+            abspath = root + '\\' + file
             if '.git' in abspath:
                 continue
             num = getpipoutput(['git log --pretty=oneline %s' %file,'wc -l'])
@@ -128,11 +128,12 @@ def getlastndays(ndays, date=datetime.datetime.now().strftime('%Y-%m-%d')):
 
 # 获取过去N周的日期列表，按自然日排序
 def getlastnweeks_begindate(nweek=5, currentday=datetime.datetime.now()):
-    sevenday = datetime.timedelta(days=6)
+    computday = currentday + datetime.timedelta(days=1)  #为了区间包含今天，先往后拨一天
+    sevenday = datetime.timedelta(days=7)
     lastnweeks_begindate = []
     for n in range(nweek):
-        currentday -=sevenday
-        lastnweeks_begindate.append(currentday.strftime('%Y-%m-%d'))
+        computday -=sevenday
+        lastnweeks_begindate.append(computday.strftime('%Y-%m-%d'))
     lastnweeks_begindate.sort()
 
     return lastnweeks_begindate
