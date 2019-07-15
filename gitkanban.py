@@ -513,7 +513,7 @@ gitpaths = input("Enter GIT Path(Split by , ):").split(',')
 
 p = input("pull code ? (Y/N):")
 
-gen_reporthtml(gitpaths,True if p=='Y' else False)
+gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
 
 #get_git_changetime_onefile('C:\eclipse4SpringCloud_WorkSpace\\financial-center-service')
 
