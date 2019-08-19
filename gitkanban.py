@@ -14,6 +14,12 @@ import io
 ON_LINUX = (platform.system() == 'Linux')
 # 报告结果生成绝对路径
 PATH_RESULT = 'C:/mygitkanban_result'
+#代码趋势统计天数
+config_code_trend_daynum = 20
+#按开发者统计代码变化量到N周
+config_code_perauthor_weeknum = 8
+#统计往前N天的代码变化量
+config_code_lastNdays = 10
 
 
 # 根据指令集合返回结果，如果出现reading log message字样，可能是因为进入的目录不正确导致的阻塞
@@ -148,6 +154,43 @@ def get_git_linesum_perdays(ndays):
     return lastdays,curr_line_nums
 
 
+#从git上获取过去N天每日变化代码行数
+def get_git_linechange_perdays(inputdays):
+
+    line_adds = []
+    line_subs = []
+    line_locs = []
+
+    for d in inputdays:
+        begintime = d+' 00:00:00'
+        endtime = d+' 23:59:59'
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since="%s"  --until="%s" ' % (begintime, endtime),
+                            'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
+        numL = num.split('\n')
+        if not num:
+            numL = [0, 0, 0]
+        num_list = {}
+        if not numL[0]:
+            num_list['add'] = 0
+        else:
+            num_list['add'] = int(numL[0])
+        if not numL[1]:
+            num_list['sub'] = 0
+        else:
+            num_list['sub'] = int(numL[1])
+        if not numL[2]:
+            num_list['loc'] = 0
+        else:
+            num_list['loc'] = int(numL[2])
+
+
+        line_adds.append(num_list['add'])
+        line_subs.append(num_list['sub'])
+        line_locs.append(num_list['loc'])
+        print(d +'当日代码变化+'+str(num_list['add']) + ' - '+ str(num_list['sub']))
+    return line_adds, line_subs, line_locs
+
+
 # 从git上获取某个开发者过去N周的代码变化量
 def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
     linesum_oneauthor_since_nweek_add = []
@@ -223,6 +266,10 @@ def img_annotation(pct, allvals):
 # 按照输入数据饼图形式展示
 def img_piedata(labels, datas, title='饼状图'):
 
+    #如果只有一个人，则不生成饼图，控件似乎不支持
+    if len(labels) == 1:
+        pass
+
     # plt.subplots定义画布和图型；figsize设置画布尺寸；aspect="equal"设置坐标轴的方正
     fig, ax = plt.subplots(figsize=(16, 8), subplot_kw=dict(aspect="equal"))
 
@@ -273,7 +320,7 @@ def img_cubedata_horizontal(labels, datas, title='柱状图'):
 
 # 根据数据形成代码趋势
 def img_ploylinedata(labels, datas, title='代码趋势图'):
-    fig, ax = plt.subplots(figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(20, 10))
     ax.plot(labels, datas)
     ax.grid(True, linestyle='-.')
     ax.tick_params(labelcolor='r', labelsize='medium', width=3)
@@ -356,7 +403,8 @@ def gen_reporthtml(gitpaths,pull=True):
     <p>统计代码工程如下:<br>%s</p>
     <p>开发者人数：%s</p>
     <p>代码总行数：%s</p>
-    <p>最近7日代码变化：<img src="daily_change_line.png"> </img></p>
+    <p>最近每日代码变化情况:<img src="lastnday_change.png"/></p>
+    <p>最近开发者代码变化：<img src="daily_change_line.png"> </img></p>
     %s
     <p>代码分布饼图：<img src="author_pie.png"> </img></p>
     <p>代码分布柱状图：<img src="author_cube.png"> </img></p>
@@ -422,21 +470,22 @@ def filterzerodata4Three(keys,values1,values2,values3):
             r_values3.append(values3[i])
     return r_keys,r_values1,r_values2,r_values3
 
+
 # git工程数据收集器
 class GitDataCollector():
     def __init__(self, paths):
         # git工程合计代码行数
         self.total_line = 0
-        # 过去两周日期
-        self.last14days = getlastndays(14)
-        # 过去2周每日代码量
-        self.last14days_num = [0 for x in range(14)]
+        # 过去N天日期
+        self.last14days = getlastndays(config_code_trend_daynum)
+        # 过去N周每日代码量
+        self.last14days_num = [0 for x in range(config_code_trend_daynum)]
         self.gitpaths = paths
         # git工程开发者编码集合
         self.authors = git_fundauthors(paths)
         # git工程开发者合计数
         self.total_authornum = len(self.authors)
-        # 过去七天增减,按照200开发人员来初始化
+        # 过去七天增减
         self.author_adds_last7days = [0 for x in range(len(self.authors))]
         self.author_subs_last7days = [0 for x in range(len(self.authors))]
         self.author_loc_last7days =  [0 for x in range(len(self.authors))]
@@ -444,16 +493,25 @@ class GitDataCollector():
         self.authorlines = [0 for x in range(self.total_authornum)]
 
         # 往前N周起始日期组
-        self.lastnweeks_begindates = getlastnweeks_begindate()
+        self.lastnweeks_begindates = getlastnweeks_begindate(nweek=config_code_perauthor_weeknum)
 
         self.oneauthor_lastweeks_linesums_add = {}
         self.oneauthor_lastweeks_linesums_sub = {}
         self.oneauthor_lastweeks_linesums_loc = {}
 
         for au in self.authors:
-            self.oneauthor_lastweeks_linesums_add[au] = [0 for x in range(5)]
-            self.oneauthor_lastweeks_linesums_sub[au] = [0 for x in range(5)]
-            self.oneauthor_lastweeks_linesums_loc[au] = [0 for x in range(5)]
+            self.oneauthor_lastweeks_linesums_add[au] = [0 for x in range(config_code_perauthor_weeknum)]
+            self.oneauthor_lastweeks_linesums_sub[au] = [0 for x in range(config_code_perauthor_weeknum)]
+            self.oneauthor_lastweeks_linesums_loc[au] = [0 for x in range(config_code_perauthor_weeknum)]
+
+        #最近N天每日代码变更量
+        self.lastNdays = getlastndays(config_code_lastNdays)
+
+
+        self.lastNdays_linenum_add = [0 for x in range(config_code_lastNdays)]
+        self.lastNdays_linenum_del = [0 for x in range(config_code_lastNdays)]
+        self.lastNdays_linenum_loc = [0 for x in range(config_code_lastNdays)]
+
 
     # 收集git数据
     def collect_all(self, pullcode=True):
@@ -465,8 +523,20 @@ class GitDataCollector():
             self.collect(gitpath)
 
 
+
+
     #  数据收集
     def collect(self, dir):
+
+        temp_adds, temp_subs, temp_locs = get_git_linechange_perdays(self.lastNdays)
+        for i in range(config_code_lastNdays):
+
+            self.lastNdays_linenum_add[i] += temp_adds[i]
+            self.lastNdays_linenum_del[i] += temp_subs[i]
+            self.lastNdays_linenum_loc[i] += temp_locs[i]
+
+
+
         self.total_line += int(get_git_linesum_until_somedate())
 
         for i, au in enumerate(self.authors):
@@ -477,14 +547,15 @@ class GitDataCollector():
             self.author_loc_last7days[i] += num_list['loc']
 
             linesum_oneauthor_since_nweek_add,linesum_oneauthor_since_nweek_sub,linesum_oneauthor_since_nweek_loc = get_git_linesum_oneauthor_since_nweek(au,self.lastnweeks_begindates)
-            for x in range(5):
+            for x in range(config_code_perauthor_weeknum):
                 self.oneauthor_lastweeks_linesums_add[au][x] += linesum_oneauthor_since_nweek_add[x]
                 self.oneauthor_lastweeks_linesums_sub[au][x] += linesum_oneauthor_since_nweek_sub[x]
                 self.oneauthor_lastweeks_linesums_loc[au][x] += linesum_oneauthor_since_nweek_loc[x]
 
 
-        for i in range(14):
+        for i in range(config_code_trend_daynum):
             self.last14days_num[i] += int(get_git_linesum_until_somedate(self.last14days[i]))
+
 
     # 形成图表
     def drawimg(self):
@@ -503,7 +574,15 @@ class GitDataCollector():
                               values2=self.oneauthor_lastweeks_linesums_sub[au],
                               values3=self.oneauthor_lastweeks_linesums_loc[au],
                               filename=au+'_weekchange',
-                              title=au +'最近5周代码变动量')
+                              title=au +'最近N周代码变动量')
+
+        img_cubedata_3bar(labels=self.lastNdays,
+                          values1=self.lastNdays_linenum_add,
+                          values2=self.lastNdays_linenum_del,
+                          values3=self.lastNdays_linenum_loc,
+                          filename='lastnday_change',
+                          title='最近7天代码每日变动情况')
+
 
 
 
