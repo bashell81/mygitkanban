@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import datetime
 import webbrowser
 import collections
+import configparser
 import io
 
 # 获取当前平台的操作系统类型
@@ -266,6 +267,7 @@ def img_annotation(pct, allvals):
 # 按照输入数据饼图形式展示
 def img_piedata(labels, datas, title='饼状图'):
 
+
     #如果只有一个人，则不生成饼图，控件似乎不支持
     if len(labels) == 1:
         pass
@@ -295,8 +297,11 @@ def img_piedata(labels, datas, title='饼状图'):
         kw["arrowprops"].update({"connectionstyle": connectionstyle})
         ax.annotate(labels[i], xy=(x, y), xytext=(1.35 * np.sign(x), 1.4 * y),
                     horizontalalignment=horizontalalignment, **kw)
+    try:
+        plt.savefig(get_resultpath() + '/author_pie.png')
+    except BaseException as e:
+        print(e)
 
-    plt.savefig(get_resultpath() + '/author_pie.png')
     plt.close()
 
 
@@ -586,14 +591,22 @@ class GitDataCollector():
 
 
 
-#gitmofang = ['C:\eclipse4SpringCloud_WorkSpace\\financial-center-service','C:\eclipse4SpringCloud_WorkSpace\\financialcenterserviceweb']
 
-gitpaths = input("Enter GIT Path(Split by , ):").split(',')
+# 获取文件的当前路径（绝对路径）
+cur_path = os.path.dirname(os.path.realpath(__file__))
 
-p = input("pull code ? (Y/N):")
+configfile = sys.argv[1]
+print("配置文件" + configfile)
+# 获取config.ini的路径
+config_path = os.path.join(cur_path, configfile)
+conf = configparser.ConfigParser()
+conf.read(config_path)
+
+gitpaths = conf.get('path', 'GIT_PATHS').split(',')
+
+p = conf.get('path', 'UPDATE_CODE')
+PATH_RESULT = conf.get('path', 'PATH_RESULT')
 
 gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
-
-#get_git_changetime_onefile('C:\eclipse4SpringCloud_WorkSpace\\financial-center-service')
 
 
