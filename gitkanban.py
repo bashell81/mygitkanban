@@ -9,6 +9,10 @@ import datetime
 import webbrowser
 import collections
 import configparser
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
 import io
 
 # 获取当前平台的操作系统类型
@@ -55,7 +59,7 @@ def get_resultpath():
 
 # 返回当前GIT工程提交代码的总人数
 def get_git_author_number():
-    return int(getpipoutput(['git shortlog -s ', 'wc -l']))
+    return int(getpipoutput(['git shortlog -s -- **/* ', 'wc -l']))
 
 
 # 遍历目录下所有文件，返回目录下git修改文件次数字典
@@ -68,7 +72,7 @@ def get_git_changetime_onefile(dir,topn=19):
             abspath = root + '\\' + file
             if '.git' in abspath:
                 continue
-            num = getpipoutput(['git log --pretty=oneline %s' %file,'wc -l'])
+            num = getpipoutput(['git log --pretty=oneline %s ' %file,'wc -l'])
 
             dict4change[abspath] = int(num)
     d = list(zip(dict4change.values(), dict4change.keys()))
@@ -85,7 +89,7 @@ def get_git_changetime_onefile(dir,topn=19):
 
 # 获取某日累计代码量
 def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-%d')):
-    linesum = getpipoutput(['git log  --pretty=tformat: --numstat --until=%s' % date, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
+    linesum = getpipoutput(['git log  --pretty=tformat: --numstat --until=%s -- **/*' % date, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
     if not linesum:
         linesum = '0'
     return str(linesum).split('\n')[0]
@@ -95,8 +99,8 @@ def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-
 def get_git_linechange_last_ndays(author, ndays=6):
     now = datetime.date.today()
     ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
-
-    num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --author=%s' % (ndaysago,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
+    print('get_git_linechange_last_ndays author='+author)
+    num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --author="%s" -- **/*' % (ndaysago,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
 
     numL = num.split('\n')
     if not num:
@@ -165,7 +169,7 @@ def get_git_linechange_perdays(inputdays):
     for d in inputdays:
         begintime = d+' 00:00:00'
         endtime = d+' 23:59:59'
-        num = getpipoutput(['git log --pretty=tformat: --numstat --since="%s"  --until="%s" ' % (begintime, endtime),
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since="%s"  --until="%s"  -- **/* ' % (begintime, endtime),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
         if not num:
@@ -201,7 +205,7 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
     for sincedate in weekbegindates:
         untildate = datetime.datetime.strptime(sincedate, '%Y-%m-%d') + datetime.timedelta(days=6)
         #print("sincedate:" + sincedate + "untildate:" + untildate.strftime('%Y-%m-%d'))
-        num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author=%s' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author="%s" -- **/*' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
         if not num:
@@ -228,8 +232,8 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
 
 # 返回开发者代码量
 def get_git_linesum_oneauthor(author_name):
-    # 查找开发者
-    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author=%s' %author_name, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
+    # 查找开发者，注意由于author名字可能有空格，所以要加双引号2019-09-04
+    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author="%s" -- **/* ' %author_name, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
     if not linesum or int(linesum) <= 0:
         linesum = 0
     return int(linesum)
@@ -248,10 +252,10 @@ def git_fundauthors(paths):
     for path in paths:
         os.chdir(path)
         #查找开发者
-        output = getpipoutput(['git shortlog -s'])
+        output = getpipoutput(['git log --pretty=format:"%ce" -- **/*'])
         for line in output.split('\n'):
-            parts = line.split('\t')
-            author_name = parts[1]
+
+            author_name = line
             if author_name not in author_names:
                 author_names.append(author_name)
 
@@ -399,21 +403,22 @@ def gen_reporthtml(gitpaths,pull=True):
 
     every_author_message = ''
     for au in gitdata.authors:
-        every_author_message +='<p><img src="'+au+'_weekchange.png"></p>'
+        every_author_message +='<p><img src="'+au+'_weekchange.png"/><img src="cid:'+au+'_weekchange.png"/></p>'
 
     message = """
     <html>
+    <meta http-equiv="Content-Type" content="text/html; charset=gbk" />
     <head></head>
     <body>
     <p>统计代码工程如下:<br>%s</p>
     <p>开发者人数：%s</p>
     <p>代码总行数：%s</p>
-    <p>最近每日代码变化情况:<img src="lastnday_change.png"/></p>
-    <p>最近开发者代码变化：<img src="daily_change_line.png"> </img></p>
+    <p>最近每日代码变化情况:<img src="cid:lastnday_change.png"/><img src="lastnday_change.png"/></p>
+    <p>最近开发者代码变化：<img src="cid:daily_change_line.png"/><img src="daily_change_line.png"/>  </p>
     %s
-    <p>代码分布饼图：<img src="author_pie.png"> </img></p>
-    <p>代码分布柱状图：<img src="author_cube.png"> </img></p>
-    <p>代码日趋势：<img src="daily_line.png"> </img></p>
+    <p>代码分布饼图：<img src="cid:author_pie.png"/><img src="author_pie.png"/>  </p>
+    <p>代码分布柱状图：<img src="cid:author_cube.png"/><img src="author_cube.png"/>  </p>
+    <p>代码日趋势：<img src="cid:daily_line.png"/><img src="daily_line.png"/>  </p>
     <p>文件更新(TOP20建议做代码分析)：%s</p>
     </body>
     </html>""" % (showpath, gitdata.total_authornum, gitdata.total_line, every_author_message,showMaxChangeFileAll)
@@ -488,6 +493,7 @@ class GitDataCollector():
         self.gitpaths = paths
         # git工程开发者编码集合
         self.authors = git_fundauthors(paths)
+
         # git工程开发者合计数
         self.total_authornum = len(self.authors)
         # 过去七天增减
@@ -589,6 +595,45 @@ class GitDataCollector():
                           title='最近7天代码每日变动情况')
 
 
+def sendmsg(subject,receivers,attfolder):
+    mail_host = "mail.yonyou.com"  # 设置服务器
+    mail_user = "xwq"  # 用户名
+    mail_pass = "001226"  # 口令
+
+
+
+    # 创建一个带附件的实例
+    message = MIMEMultipart()
+    #message['From'] = Header("用友上海分公司GIT代码看板", 'utf-8')
+    #message['To'] = Header("测试", 'utf-8')
+
+    message['Subject'] = Header(subject, 'utf-8')
+
+    txt_html = open(attfolder+"\\index.html", "r").read()
+
+    message.attach(MIMEText(txt_html, 'html', 'utf-8'))
+    message["Accept-Language"]="zh-CN"
+    message["Accept-Charset"]="ISO-8859-1,utf-8"
+    sender = 'xwq@yonyou.com'
+
+    for parent, dirnames, filenames in os.walk(attfolder, followlinks=True):
+        for filename in filenames:
+            file_path = os.path.join(parent, filename)
+            if os.path.split(file_path)[-1] != 'index.html':
+                att = MIMEText(open(file_path, 'rb').read(), 'base64', 'utf-8')
+                att["Content-Type"] = 'application/octet-stream'
+                att["Content-Disposition"] = 'attachment; filename="'+os.path.split(file_path)[-1]+'"'
+                att['Content-ID'] = os.path.split(file_path)[-1]
+                message.attach(att)
+    try:
+        smtpObj = smtplib.SMTP()
+        smtpObj.connect(mail_host, 25)  # 25 为 SMTP 端口号
+        smtpObj.login(mail_user, mail_pass)
+        smtpObj.sendmail(sender, receivers, message.as_string())
+        print("邮件发送成功")
+    except smtplib.SMTPException:
+        print("Error: 无法发送邮件")
+
 
 
 
@@ -600,7 +645,7 @@ print("配置文件" + configfile)
 # 获取config.ini的路径
 config_path = os.path.join(cur_path, configfile)
 conf = configparser.ConfigParser()
-conf.read(config_path)
+conf.read(config_path,encoding='utf-8')
 
 gitpaths = conf.get('path', 'GIT_PATHS').split(',')
 
@@ -608,5 +653,15 @@ p = conf.get('path', 'UPDATE_CODE')
 PATH_RESULT = conf.get('path', 'PATH_RESULT')
 
 gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
+try:
+    MAIL_TO = conf.get('path','MAIL_TO').split(';')
+    MAIL_TITLE = conf.get('path','MAIL_TITLE')
+    title = '用友上海分公司GIT代码看板'
+    if not MAIL_TITLE :
+        title = MAIL_TITLE
+    sendmsg(title, MAIL_TO, PATH_RESULT)
+except BaseException as e:
+        print(e)
+
 
 
