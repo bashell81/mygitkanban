@@ -61,6 +61,14 @@ def get_resultpath():
 def get_git_author_number():
     return int(getpipoutput(['git shortlog -s -- **/* ', 'wc -l']))
 
+# 返回当前GIT工程对应的当前分支编码
+def get_git_branch(dir):
+    os.chdir(dir)
+    blist = getpipoutput(['git branch'])
+    for b in blist.split('\n'):
+        if str(b).startswith('*'):
+            return str(b)
+
 
 # 遍历目录下所有文件，返回目录下git修改文件次数字典
 def get_git_changetime_onefile(dir,topn=19):
@@ -391,10 +399,11 @@ def gen_reporthtml(gitpaths,pull=True):
 
     showMaxChangeFileAll = ''
     for p in gitdata.gitpaths:
+
         title = '<p>工程路径:'+p +'</p>'
         showMaxChangeFile = title +'<table><tr><td>文件路径</td><td>提交次数Top20</td></tr>'
         showpath += p
-        showpath += '<br>'
+        showpath += '   当前统计分支为：'+get_git_branch(p) + '<br>'
         changedict = get_git_changetime_onefile(p)
         for key,value in changedict.items():
             showMaxChangeFile += '<tr><td>'+str(key)+'</td><td>'+str(value)+'</td></tr>'
@@ -656,8 +665,9 @@ gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
 try:
     MAIL_TO = conf.get('path','MAIL_TO').split(';')
     MAIL_TITLE = conf.get('path','MAIL_TITLE')
+    print(MAIL_TITLE)
     title = '用友上海分公司GIT代码看板'
-    if not MAIL_TITLE :
+    if  MAIL_TITLE :
         title = MAIL_TITLE
     sendmsg(title, MAIL_TO, PATH_RESULT)
 except BaseException as e:
