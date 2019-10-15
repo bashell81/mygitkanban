@@ -411,6 +411,7 @@ def gen_reporthtml(gitpaths,pull=True):
         showMaxChangeFileAll += showMaxChangeFile
 
     every_author_message = ''
+
     for au in gitdata.authors:
         every_author_message +='<p><img src="'+au+'_weekchange.png"/><img src="cid:'+au+'_weekchange.png"/></p>'
 
@@ -577,24 +578,28 @@ class GitDataCollector():
             self.last14days_num[i] += int(get_git_linesum_until_somedate(self.last14days[i]))
 
 
+
+
+
     # 形成图表
     def drawimg(self):
-        img_piedata(self.authors, self.authorlines, '开发人员代码行数比例')
-        img_cubedata_horizontal(self.authors, self.authorlines, '开发人员代码行数对比')
+        namelabels = readchinese(self.authors)
+        img_piedata(namelabels, self.authorlines, '开发人员代码行数比例')
+        img_cubedata_horizontal(namelabels, self.authorlines, '开发人员代码行数对比')
         img_ploylinedata(self.last14days, self.last14days_num, 'GIT工程代码趋势图')
-        img_cubedata_3bar(labels=self.authors,
+        img_cubedata_3bar(labels=namelabels,
                           values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
                           values3=self.author_loc_last7days,
                           filterzero = True,
                           filename='daily_change_line')
-        for au in self.authors:
+        for au,name in zip(self.authors,namelabels):
             img_cubedata_3bar(labels=self.lastnweeks_begindates,
                               values1=self.oneauthor_lastweeks_linesums_add[au],
                               values2=self.oneauthor_lastweeks_linesums_sub[au],
                               values3=self.oneauthor_lastweeks_linesums_loc[au],
                               filename=au+'_weekchange',
-                              title=au +'最近N周代码变动量')
+                              title=name +'最近周代码变动量')
 
         img_cubedata_3bar(labels=self.lastNdays,
                           values1=self.lastNdays_linenum_add,
@@ -644,10 +649,35 @@ def sendmsg(subject,receivers,attfolder):
         print("Error: 无法发送邮件")
 
 
+# 读取邮箱对应的中文名
+def readchinese(emails):
+    labels = []
+    for e in emails:
+        labels.append(namedict[e])
+    return labels
 
+def getnamedict(infile):
+    input_file = open(infile, mode="r", encoding="utf-8")
+    infile_content = input_file.readlines()
+    namedict = {}
+    for each in infile_content:
+        s = each.split('=')
+        print(s)
+        namedict[str(s[0])] = s[1]
+
+    print(namedict)
+    input_file.close()
+    return namedict
 
 # 获取文件的当前路径（绝对路径）
 cur_path = os.path.dirname(os.path.realpath(__file__))
+
+# 读取中文名配置
+try:
+    namedict = getnamedict(cur_path+'\\usernames.ini')
+except BaseException as e:
+        print(e)
+
 
 configfile = sys.argv[1]
 print("配置文件" + configfile)
