@@ -653,7 +653,10 @@ def sendmsg(subject,receivers,attfolder):
 def readchinese(emails):
     labels = []
     for e in emails:
-        labels.append(namedict[e])
+        if e in namedict.keys():
+            labels.append(namedict[e])
+        else:
+            labels.append(e)
     return labels
 
 def getnamedict(infile):
@@ -662,7 +665,6 @@ def getnamedict(infile):
     namedict = {}
     for each in infile_content:
         s = each.split('=')
-        print(s)
         namedict[str(s[0])] = s[1]
 
     print(namedict)
@@ -675,6 +677,7 @@ cur_path = os.path.dirname(os.path.realpath(__file__))
 # 读取中文名配置
 try:
     namedict = getnamedict(cur_path+'\\usernames.ini')
+    print(namedict)
 except BaseException as e:
         print(e)
 
