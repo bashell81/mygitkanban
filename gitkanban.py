@@ -250,7 +250,7 @@ def get_git_linesum_oneauthor(author_name):
 # 自动在当前路径下执行强制Merge更新到最新版本
 def git_autogitpull():
     print('开始获取GIT最新代码...')
-    print(getpipoutput(['git pull']))
+    print(getpipoutput(['git pull --force']))
 
 
 # 查找工程下的开发者，重复的进行合并
