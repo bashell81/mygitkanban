@@ -402,8 +402,9 @@ def gen_reporthtml(gitpaths,pull=True):
 
         title = '<p>工程路径:'+p +'</p>'
         showMaxChangeFile = title +'<table><tr><td>文件路径</td><td>提交次数Top20</td></tr>'
-        showpath += p
-        showpath += '   当前统计分支为：'+get_git_branch(p) + '<br>'
+        showpath += '  项目名称：' + pathAndNameDict[p] + ' ////代码路径：'+p
+        showpath += '   ////当前统计分支：'+get_git_branch(p) + '<br>'
+
         changedict = get_git_changetime_onefile(p)
         for key,value in changedict.items():
             showMaxChangeFile += '<tr><td>'+str(key)+'</td><td>'+str(value)+'</td></tr>'
@@ -689,7 +690,18 @@ config_path = os.path.join(cur_path, configfile)
 conf = configparser.ConfigParser()
 conf.read(config_path,encoding='utf-8')
 
-gitpaths = conf.get('path', 'GIT_PATHS').split(',')
+paths = conf.get('path', 'GIT_PATHS').split(',')
+
+gitpaths = []
+pathAndNameDict = {}
+#解析项目中文名称
+for onePath in paths:
+    pathAndName = onePath.split('|')
+    gitpaths.append(pathAndName[0])
+    if len(pathAndName)> 1:
+        pathAndNameDict[pathAndName[0]] = pathAndName[1]
+
+print(pathAndNameDict)
 
 p = conf.get('path', 'UPDATE_CODE')
 PATH_RESULT = conf.get('path', 'PATH_RESULT')
