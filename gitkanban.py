@@ -14,6 +14,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
 import io
+import seaborn as sns
+from pandas import Series,DataFrame
+
+
 
 # 获取当前平台的操作系统类型
 ON_LINUX = (platform.system() == 'Linux')
@@ -25,7 +29,8 @@ config_code_trend_daynum = 20
 config_code_perauthor_weeknum = 8
 #统计往前N天的代码变化量
 config_code_lastNdays = 10
-
+#小组成员
+GROUP_NAMEDICT = {}
 
 # 根据指令集合返回结果，如果出现reading log message字样，可能是因为进入的目录不正确导致的阻塞
 def getpipoutput(cmds, quiet=False):
@@ -275,6 +280,35 @@ def img_annotation(pct, allvals):
     absolute = int(pct/100.*np.sum(allvals))
     return "{:.1f}%\n({:d})".format(pct, absolute)
 
+# 开发提交代码热力图
+def img_seaborn(groupusersdict, labels,  values1, values2, values3):
+    labels, values1, values2, values3 = filterzerodata4Three(labels, values1, values2, values3)
+    if not labels:
+        return
+
+    for la in labels:
+        t = la.strip('\n')
+        if t in groupusersdict.keys():
+            groupusersdict[t] = 1
+
+    namecolvalues =[]
+    commitcolvalues =[]
+    periodvalues =  [0 for x in range(len(groupusersdict.keys()))]
+    for name in groupusersdict.keys():
+        namecolvalues.append(name);
+        commitcolvalues.append(groupusersdict[name])
+
+    fig, ax = plt.subplots(figsize=(14, 2))
+    df = DataFrame({'姓名':namecolvalues, '提交':commitcolvalues,'区间':periodvalues})
+    result = df.pivot(index='区间', columns='姓名', values='提交')
+
+
+    ax = sns.heatmap(result,annot=True, fmt="g",cmap="Oranges")
+    ax.set_title("近7天组内提交情况0代表无提交，1代表有提交，3代表特殊情况")
+    plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+    plt.savefig(get_resultpath() + '/seaborn.png')
+    plt.close()
+
 
 # 按照输入数据饼图形式展示
 def img_piedata(labels, datas, title='饼状图'):
@@ -425,6 +459,7 @@ def gen_reporthtml(gitpaths,pull=True):
     <p>开发者人数：%s</p>
     <p>代码总行数：%s</p>
     <p>最近每日代码变化情况:<img src="cid:lastnday_change.png"/><img src="lastnday_change.png"/></p>
+    <p>最近7日组内提交汇总<img src='cid:seaborn.png'/><img src='seaborn.png'/></p>
     <p>最近开发者代码变化：<img src="cid:daily_change_line.png"/><img src="daily_change_line.png"/>  </p>
     %s
     <p>代码分布饼图：<img src="cid:author_pie.png"/><img src="author_pie.png"/>  </p>
@@ -609,6 +644,11 @@ class GitDataCollector():
                           filename='lastnday_change',
                           title='最近7天代码每日变动情况')
 
+        if not GROUP_NAMEDICT:
+            img_seaborn(GROUP_NAMEDICT,labels=namelabels,
+                           values1=self.author_adds_last7days,
+                          values2=self.author_subs_last7days,
+                          values3=self.author_loc_last7days,)
 
 def sendmsg(subject,receivers,attfolder):
     mail_host = "mail.yonyou.com"  # 设置服务器
@@ -700,11 +740,21 @@ for onePath in paths:
     gitpaths.append(pathAndName[0])
     if len(pathAndName)> 1:
         pathAndNameDict[pathAndName[0]] = pathAndName[1]
+    else:
+        pathAndNameDict[pathAndName[0]] = ''
 
 print(pathAndNameDict)
 
 p = conf.get('path', 'UPDATE_CODE')
 PATH_RESULT = conf.get('path', 'PATH_RESULT')
+
+try:
+    mydict = conf.get('path', 'GROUP_NAMEDICT')
+    print(mydict)
+    GROUP_NAMEDICT = eval(mydict)
+    print(GROUP_NAMEDICT)
+except BaseException as e:
+    print(e)
 
 gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
 try:
