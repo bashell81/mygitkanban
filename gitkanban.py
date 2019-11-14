@@ -41,11 +41,12 @@ def getpipoutput(cmds, quiet=False):
 
     print(cmds)
 
-    child = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
+# 必须设置 close_fds=True，否则会存在内存泄漏
+    child = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True, close_fds=True)
     processes = [child]
 
     for x in cmds[1:]:
-        child = subprocess.Popen(x, stdin=child.stdout, stdout=subprocess.PIPE, shell=True)
+        child = subprocess.Popen(x, stdin=child.stdout, stdout=subprocess.PIPE, shell=True , close_fds=True)
         processes.append(child)
 
     output = child.communicate()[0]
@@ -303,7 +304,7 @@ def img_seaborn(groupusersdict, labels,  values1, values2, values3):
     result = df.pivot(index='区间', columns='姓名', values='提交')
 
 
-    ax = sns.heatmap(result,annot=True, fmt="g",cmap="Oranges")
+    ax = sns.heatmap(result,annot=True, fmt="g",cmap="Greens")
     ax.set_title("近7天组内提交情况0代表无提交，1代表有提交，3代表特殊情况")
     plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
     plt.savefig(get_resultpath() + '/seaborn.png')
@@ -644,7 +645,7 @@ class GitDataCollector():
                           filename='lastnday_change',
                           title='最近7天代码每日变动情况')
 
-        if not GROUP_NAMEDICT:
+        if len(GROUP_NAMEDICT) > 0:
             img_seaborn(GROUP_NAMEDICT,labels=namelabels,
                            values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
