@@ -16,6 +16,7 @@ from email.header import Header
 import io
 import seaborn as sns
 from pandas import Series,DataFrame
+import signal,time
 
 
 
@@ -42,17 +43,32 @@ def getpipoutput(cmds, quiet=False):
     print(cmds)
 
 # 必须设置 close_fds=True，否则会存在内存泄漏
-    child = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True, close_fds=True)
+    child = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=False, close_fds=True)
     processes = [child]
 
     for x in cmds[1:]:
-        child = subprocess.Popen(x, stdin=child.stdout, stdout=subprocess.PIPE, shell=True , close_fds=True)
+        child = subprocess.Popen(x, stdin=child.stdout, stdout=subprocess.PIPE, shell=False, close_fds=True)
         processes.append(child)
 
     output = child.communicate()[0]
 
     for x in processes:
-        x.wait()
+        start = datetime.datetime.now()
+        while x.poll() is None:
+            time.sleep(1)
+            now = datetime.datetime.now()
+            if (now - start).seconds > 100:
+                if x.stdout:
+                    x.stdout.close()
+                if x.stdin:
+                    x.stdin.close()
+                if x.stderr:
+                    x.stderr.close()
+                try:
+                    os.killpg(x.pid, signal.SIGUSR1)
+                except OSError:
+                    print(OSError)
+
     # 此处是由于Python3返回字节集合需要通过转码变为字符串输出
     return output.decode('utf-8').rstrip('\n')
 
@@ -74,6 +90,23 @@ def get_git_branch(dir):
     for b in blist.split('\n'):
         if str(b).startswith('*'):
             return str(b)
+
+# 返回最近7田提交者列表
+def get_git_activity_authorlist(dir):
+    os.chdir(dir)
+    #返回最近7天的提交邮箱,含今天
+    blist = getpipoutput(['git log --pretty=format:"%ce" --since=6.days'])
+    print(blist)
+    li = []
+    if blist:
+        for b in blist.split('\n'):
+            li.append(b)
+        # 去重
+        uniqueli = list(set(readchinese(li)))
+        print(uniqueli)
+        return ','.join(uniqueli)
+    else:
+        return '无提交'
 
 
 # 遍历目录下所有文件，返回目录下git修改文件次数字典
@@ -440,11 +473,19 @@ def gen_reporthtml(gitpaths,pull=True):
         showpath += '  项目名称：' + pathAndNameDict[p] + ' ////代码路径：'+p
         showpath += '   ////当前统计分支：'+get_git_branch(p) + '<br>'
 
-        changedict = get_git_changetime_onefile(p)
-        for key,value in changedict.items():
-            showMaxChangeFile += '<tr><td>'+str(key)+'</td><td>'+str(value)+'</td></tr>'
-        showMaxChangeFile = showMaxChangeFile + '</table>'
-        showMaxChangeFileAll += showMaxChangeFile
+        strCommitters = get_git_activity_authorlist(p)
+        if strCommitters =='无提交':
+            showpath += '<div style="background:gray">近7天无代码提交</div><br>'
+        else:
+            showpath += '<div style="background:green">活跃提交者：' +strCommitters +  '</div><br>'
+
+        showMaxChangeFileAll = ''
+        if ISCOUNTCODE == 'Y':
+            changedict = get_git_changetime_onefile(p)
+            for key,value in changedict.items():
+                showMaxChangeFile += '<tr><td>'+str(key)+'</td><td>'+str(value)+'</td></tr>'
+            showMaxChangeFile = showMaxChangeFile + '</table>'
+            showMaxChangeFileAll += showMaxChangeFile
 
     every_author_message = ''
 
@@ -623,7 +664,9 @@ class GitDataCollector():
         namelabels = readchinese(self.authors)
         img_piedata(namelabels, self.authorlines, '开发人员代码行数比例')
         img_cubedata_horizontal(namelabels, self.authorlines, '开发人员代码行数对比')
-        img_ploylinedata(self.last14days, self.last14days_num, 'GIT工程代码趋势图')
+        if ISCOUNTCODE == 'Y':
+            img_ploylinedata(self.last14days, self.last14days_num, 'GIT工程代码趋势图')
+
         img_cubedata_3bar(labels=namelabels,
                           values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
@@ -749,11 +792,18 @@ print(pathAndNameDict)
 p = conf.get('path', 'UPDATE_CODE')
 PATH_RESULT = conf.get('path', 'PATH_RESULT')
 
+
+ISCOUNTCODE = ''
 try:
     mydict = conf.get('path', 'GROUP_NAMEDICT')
     print(mydict)
     GROUP_NAMEDICT = eval(mydict)
     print(GROUP_NAMEDICT)
+
+    # 由于统计代码行数比较耗时，默认情况下不配置启用
+    ISCOUNTCODE = conf.get('path', 'ISCOUNTCODE')
+    if not ISCOUNTCODE:
+        ISCOUNTCODE = 'N'
 except BaseException as e:
     print(e)
 
