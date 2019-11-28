@@ -13,25 +13,24 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
-import io
 import seaborn as sns
-from pandas import Series,DataFrame
-import signal,time
-
-
+from pandas import DataFrame
+import signal
+import time
 
 # 获取当前平台的操作系统类型
 ON_LINUX = (platform.system() == 'Linux')
 # 报告结果生成绝对路径
 PATH_RESULT = 'C:/mygitkanban_result'
-#代码趋势统计天数
+# 代码趋势统计天数
 config_code_trend_daynum = 20
-#按开发者统计代码变化量到N周
+# 按开发者统计代码变化量到N周
 config_code_perauthor_weeknum = 8
-#统计往前N天的代码变化量
+# 统计往前N天的代码变化量
 config_code_lastNdays = 10
-#小组成员
+# 小组成员
 GROUP_NAMEDICT = {}
+
 
 # 根据指令集合返回结果，如果出现reading log message字样，可能是因为进入的目录不正确导致的阻塞
 def getpipoutput(cmds, quiet=False):
@@ -75,13 +74,15 @@ def getpipoutput(cmds, quiet=False):
 
 # 获得生成结果页面的文件夹绝对路径，如果不存在则创建一个
 def get_resultpath():
-    if os.path.exists(PATH_RESULT) == False:
+    if os.path.exists(PATH_RESULT) is False:
         os.mkdir(PATH_RESULT)
     return PATH_RESULT
+
 
 # 返回当前GIT工程提交代码的总人数
 def get_git_author_number():
     return int(getpipoutput(['git shortlog -s -- **/* ', 'wc -l']))
+
 
 # 返回当前GIT工程对应的当前分支编码
 def get_git_branch(dir):
@@ -91,10 +92,11 @@ def get_git_branch(dir):
         if str(b).startswith('*'):
             return str(b)
 
+
 # 返回最近7田提交者列表
 def get_git_activity_authorlist(dir):
     os.chdir(dir)
-    #返回最近7天的提交邮箱,含今天
+    # 返回最近7天的提交邮箱,含今天
     blist = getpipoutput(['git log --pretty=format:"%ce" --since=6.days'])
     print(blist)
     li = []
@@ -110,8 +112,7 @@ def get_git_activity_authorlist(dir):
 
 
 # 遍历目录下所有文件，返回目录下git修改文件次数字典
-def get_git_changetime_onefile(dir,topn=19):
-
+def get_git_changetime_onefile(dir, topn=19):
     dict4change = collections.OrderedDict()
     for root, dirs, files in os.walk(dir):
         os.chdir(root)
@@ -133,6 +134,7 @@ def get_git_changetime_onefile(dir,topn=19):
             break
 
     return retdict
+
 
 # 获取某日累计代码量
 def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-%d')):
@@ -186,7 +188,7 @@ def getlastndays(ndays, date=datetime.datetime.now().strftime('%Y-%m-%d')):
 
 # 获取过去N周的日期列表，按自然日排序
 def getlastnweeks_begindate(nweek=5, currentday=datetime.datetime.now()):
-    computday = currentday + datetime.timedelta(days=1)  #为了区间包含今天，先往后拨一天
+    computday = currentday + datetime.timedelta(days=1)  # 为了区间包含今天，先往后拨一天
     sevenday = datetime.timedelta(days=7)
     lastnweeks_begindate = []
     for n in range(nweek):
@@ -206,7 +208,7 @@ def get_git_linesum_perdays(ndays):
     return lastdays,curr_line_nums
 
 
-#从git上获取过去N天每日变化代码行数
+# 从git上获取过去N天每日变化代码行数
 def get_git_linechange_perdays(inputdays):
 
     line_adds = []
@@ -235,11 +237,10 @@ def get_git_linechange_perdays(inputdays):
         else:
             num_list['loc'] = int(numL[2])
 
-
         line_adds.append(num_list['add'])
         line_subs.append(num_list['sub'])
         line_locs.append(num_list['loc'])
-        print(d +'当日代码变化+'+str(num_list['add']) + ' - '+ str(num_list['sub']))
+        print(d + '当日代码变化+' +str(num_list['add']) + ' - ' + str(num_list['sub']))
     return line_adds, line_subs, line_locs
 
 
@@ -251,7 +252,7 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
 
     for sincedate in weekbegindates:
         untildate = datetime.datetime.strptime(sincedate, '%Y-%m-%d') + datetime.timedelta(days=6)
-        #print("sincedate:" + sincedate + "untildate:" + untildate.strftime('%Y-%m-%d'))
+
         num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author="%s" -- **/*' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
@@ -277,10 +278,11 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
 
     return linesum_oneauthor_since_nweek_add ,linesum_oneauthor_since_nweek_sub,linesum_oneauthor_since_nweek_loc
 
+
 # 返回开发者代码量
 def get_git_linesum_oneauthor(author_name):
     # 查找开发者，注意由于author名字可能有空格，所以要加双引号2019-09-04
-    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author="%s" -- **/* ' %author_name, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
+    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author="%s" -- **/* ' %author_name , 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
     if not linesum or int(linesum) <= 0:
         linesum = 0
     return int(linesum)
@@ -298,7 +300,7 @@ def git_fundauthors(paths):
 
     for path in paths:
         os.chdir(path)
-        #查找开发者
+        # 查找开发者
         output = getpipoutput(['git log --pretty=format:"%ce" -- **/*'])
         for line in output.split('\n'):
 
@@ -313,6 +315,7 @@ def git_fundauthors(paths):
 def img_annotation(pct, allvals):
     absolute = int(pct/100.*np.sum(allvals))
     return "{:.1f}%\n({:d})".format(pct, absolute)
+
 
 # 开发提交代码热力图
 def img_seaborn(groupusersdict, labels,  values1, values2, values3):
@@ -329,13 +332,12 @@ def img_seaborn(groupusersdict, labels,  values1, values2, values3):
     commitcolvalues =[]
     periodvalues =  [0 for x in range(len(groupusersdict.keys()))]
     for name in groupusersdict.keys():
-        namecolvalues.append(name);
+        namecolvalues.append(name)
         commitcolvalues.append(groupusersdict[name])
 
     fig, ax = plt.subplots(figsize=(14, 2))
     df = DataFrame({'姓名':namecolvalues, '提交':commitcolvalues,'区间':periodvalues})
     result = df.pivot(index='区间', columns='姓名', values='提交')
-
 
     ax = sns.heatmap(result,annot=True, fmt="g",cmap="Greens")
     ax.set_title("近7天组内提交情况0代表无提交，1代表有提交，3代表特殊情况")
@@ -346,12 +348,9 @@ def img_seaborn(groupusersdict, labels,  values1, values2, values3):
 
 # 按照输入数据饼图形式展示
 def img_piedata(labels, datas, title='饼状图'):
-
-
-    #如果只有一个人，则不生成饼图，控件似乎不支持
+    # 如果只有一个人，则不生成饼图，控件似乎不支持
     if len(labels) == 1:
         pass
-
     # plt.subplots定义画布和图型；figsize设置画布尺寸；aspect="equal"设置坐标轴的方正
     fig, ax = plt.subplots(figsize=(16, 8), subplot_kw=dict(aspect="equal"))
 
@@ -387,7 +386,6 @@ def img_piedata(labels, datas, title='饼状图'):
 
 # 根据输入数据形成柱状图
 def img_cubedata_horizontal(labels, datas, title='柱状图'):
-
     plt.rcdefaults()
     fig, ax = plt.subplots(figsize=(16, 8))
     y_pos = np.arange(len(labels))
@@ -462,7 +460,7 @@ def gen_reporthtml(gitpaths,pull=True):
     gitdata.collect_all(pull)
     gitdata.drawimg()
 
-    #根据开发者动态生成每个开发者近5周画像
+    # 根据开发者动态生成每个开发者近5周画像
     showpath = ''
 
     showMaxChangeFileAll = ''
@@ -513,7 +511,7 @@ def gen_reporthtml(gitpaths,pull=True):
 
     # 改变标准输出的默认编码
     # utf-8中文乱码
-    #sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
+    # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
 
     # 写入文件
     f.write(message)
@@ -524,7 +522,7 @@ def gen_reporthtml(gitpaths,pull=True):
     webbrowser.open(get_resultpath() + GEN_HTML, new=1)
 
 
-#去掉值全为0的开发者
+# 去掉值全为0的开发者
 def filterdata4One(keys,values):
     r_keys = []
     r_values = []
@@ -537,7 +535,7 @@ def filterdata4One(keys,values):
     return r_keys,r_values
 
 
-#去掉值全为0的开发者
+# 去掉值全为0的开发者
 def filterdata4Two(keys,values1,values2):
     r_keys = []
     r_values1 = []
@@ -552,7 +550,7 @@ def filterdata4Two(keys,values1,values2):
     return r_keys, r_values1, r_values2
 
 
-#去掉值全为0的开发者
+# 去掉值全为0的开发者
 def filterzerodata4Three(keys,values1,values2,values3):
     r_keys = []
     r_values1 = []
@@ -603,14 +601,13 @@ class GitDataCollector():
             self.oneauthor_lastweeks_linesums_sub[au] = [0 for x in range(config_code_perauthor_weeknum)]
             self.oneauthor_lastweeks_linesums_loc[au] = [0 for x in range(config_code_perauthor_weeknum)]
 
-        #最近N天每日代码变更量
+        # 最近N天每日代码变更量
         self.lastNdays = getlastndays(config_code_lastNdays)
 
 
         self.lastNdays_linenum_add = [0 for x in range(config_code_lastNdays)]
         self.lastNdays_linenum_del = [0 for x in range(config_code_lastNdays)]
         self.lastNdays_linenum_loc = [0 for x in range(config_code_lastNdays)]
-
 
     # 收集git数据
     def collect_all(self, pullcode=True):
@@ -621,20 +618,14 @@ class GitDataCollector():
                 git_autogitpull()
             self.collect(gitpath)
 
-
-
-
     #  数据收集
     def collect(self, dir):
-
         temp_adds, temp_subs, temp_locs = get_git_linechange_perdays(self.lastNdays)
         for i in range(config_code_lastNdays):
 
             self.lastNdays_linenum_add[i] += temp_adds[i]
             self.lastNdays_linenum_del[i] += temp_subs[i]
             self.lastNdays_linenum_loc[i] += temp_locs[i]
-
-
 
         self.total_line += int(get_git_linesum_until_somedate())
 
@@ -654,10 +645,6 @@ class GitDataCollector():
 
         for i in range(config_code_trend_daynum):
             self.last14days_num[i] += int(get_git_linesum_until_somedate(self.last14days[i]))
-
-
-
-
 
     # 形成图表
     def drawimg(self):
@@ -694,17 +681,14 @@ class GitDataCollector():
                           values2=self.author_subs_last7days,
                           values3=self.author_loc_last7days,)
 
+
 def sendmsg(subject,receivers,attfolder):
     mail_host = "mail.yonyou.com"  # 设置服务器
     mail_user = "xwq"  # 用户名
     mail_pass = "001226"  # 口令
 
-
-
     # 创建一个带附件的实例
     message = MIMEMultipart()
-    #message['From'] = Header("用友上海分公司GIT代码看板", 'utf-8')
-    #message['To'] = Header("测试", 'utf-8')
 
     message['Subject'] = Header(subject, 'utf-8')
 
@@ -744,6 +728,7 @@ def readchinese(emails):
             labels.append(e)
     return labels
 
+
 def getnamedict(infile):
     input_file = open(infile, mode="r", encoding="utf-8")
     infile_content = input_file.readlines()
@@ -756,6 +741,7 @@ def getnamedict(infile):
     input_file.close()
     return namedict
 
+
 # 获取文件的当前路径（绝对路径）
 cur_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -764,7 +750,7 @@ try:
     namedict = getnamedict(cur_path+'\\usernames.ini')
     print(namedict)
 except BaseException as e:
-        print(e)
+    print(e)
 
 
 configfile = sys.argv[1]
@@ -772,13 +758,13 @@ print("配置文件" + configfile)
 # 获取config.ini的路径
 config_path = os.path.join(cur_path, configfile)
 conf = configparser.ConfigParser()
-conf.read(config_path,encoding='utf-8')
+conf.read(config_path, encoding='utf-8')
 
 paths = conf.get('path', 'GIT_PATHS').split(',')
 
 gitpaths = []
 pathAndNameDict = {}
-#解析项目中文名称
+# 解析项目中文名称
 for onePath in paths:
     pathAndName = onePath.split('|')
     gitpaths.append(pathAndName[0])
@@ -817,7 +803,7 @@ try:
         title = MAIL_TITLE
     sendmsg(title, MAIL_TO, PATH_RESULT)
 except BaseException as e:
-        print(e)
+    print(e)
 
 
 
