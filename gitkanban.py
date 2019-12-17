@@ -17,6 +17,7 @@ import seaborn as sns
 from pandas import DataFrame
 import signal
 import time
+import pymysql
 
 # 获取当前平台的操作系统类型
 ON_LINUX = (platform.system() == 'Linux')
@@ -30,6 +31,48 @@ config_code_perauthor_weeknum = 8
 config_code_lastNdays = 10
 # 小组成员
 GROUP_NAMEDICT = {}
+
+# DB information
+DB_HOST = '127.0.0.1'
+DB_PORT = 3306
+DB_USER = 'test'
+DB_PASSWORD = 'test'
+DB_DATABASE = 'kk_kanban'
+
+# mysql 执行
+def insertOrUpdateCommitData(useridlist ,addlines,dellines,loclines,date=datetime.datetime.now().strftime('%Y-%m-%d')):
+    if IS_DB_STORE == 'N':
+        return
+
+    # 如果不是周一，则不持久化到DB
+    #if datetime.now.weekday() != 1:
+        #return
+
+    conn=pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_DATABASE,
+        charset='utf8'
+    )
+
+    cursor = conn.cursor()
+    for userid,addline,delline,locline in zip(useridlist,addlines,dellines,loclines):
+        t = userid.strip('\n')
+        print(t)
+        print(date)
+        del_cmd = "DELETE FROM checkdate_record WHERE userid='%s' and fmtdate='%s'" %(t,date)
+        cursor.execute(del_cmd)
+
+        if addline > 0 or delline>0 or locline >0:
+            mysql_cmd = "INSERT INTO  checkdate_record (userid,fmtdate,addline,delline,locline) VALUES('%s','%s','%s','%s','%s');" % (t, date,addline,delline,locline)
+            cursor.execute(mysql_cmd)
+
+    conn.commit()
+    cursor.close()  # 关闭游标
+    conn.close()  # 关闭连接
+
 
 
 # 根据指令集合返回结果，如果出现reading log message字样，可能是因为进入的目录不正确导致的阻塞
@@ -680,6 +723,7 @@ class GitDataCollector():
                            values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
                           values3=self.author_loc_last7days,)
+            insertOrUpdateCommitData(namelabels,self.author_adds_last7days,self.author_subs_last7days,self.author_loc_last7days)
 
 
 def sendmsg(subject,receivers,attfolder):
@@ -779,6 +823,7 @@ p = conf.get('path', 'UPDATE_CODE')
 PATH_RESULT = conf.get('path', 'PATH_RESULT')
 
 
+
 ISCOUNTCODE = ''
 try:
     mydict = conf.get('path', 'GROUP_NAMEDICT')
@@ -792,6 +837,16 @@ try:
         ISCOUNTCODE = 'N'
 except BaseException as e:
     print(e)
+
+IS_DB_STORE = ''
+# 是否将结果插入数据库
+try:
+    IS_DB_STORE = conf.get('path', 'IS_DB_STORE')
+    if not IS_DB_STORE:
+        IS_DB_STORE = 'N'
+except BaseException as e:
+    print(e)
+
 
 gen_reporthtml(gitpaths,True if p.upper()=='Y' else False)
 try:
