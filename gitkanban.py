@@ -33,10 +33,10 @@ config_code_lastNdays = 10
 GROUP_NAMEDICT = {}
 
 # DB information
-DB_HOST = '127.0.0.1'
+DB_HOST = '123.56.118.102'
 DB_PORT = 3306
-DB_USER = 'test'
-DB_PASSWORD = 'test'
+DB_USER = 'kk_kanban'
+DB_PASSWORD = 'Hong2008+!'
 DB_DATABASE = 'kk_kanban'
 
 # mysql 执行
@@ -56,14 +56,15 @@ def insertOrUpdateCommitData(useridlist ,addlines,dellines,loclines,date=datetim
         database=DB_DATABASE,
         charset='utf8'
     )
-
+    print(useridlist)
     cursor = conn.cursor()
     for userid,addline,delline,locline in zip(useridlist,addlines,dellines,loclines):
         t = userid.strip('\n')
-        print(t)
-        print(date)
-        del_cmd = "DELETE FROM checkdate_record WHERE userid='%s' and fmtdate='%s'" %(t,date)
-        cursor.execute(del_cmd)
+        #print(t)
+        #print(date)
+        # 存在一个人在多个组的情况，所以不能删除，在报表中做去重处理
+        #del_cmd = "DELETE FROM checkdate_record WHERE userid='%s' and fmtdate='%s'" %(t,date)
+        #cursor.execute(del_cmd)
 
         if addline > 0 or delline>0 or locline >0:
             mysql_cmd = "INSERT INTO  checkdate_record (userid,fmtdate,addline,delline,locline) VALUES('%s','%s','%s','%s','%s');" % (t, date,addline,delline,locline)
@@ -124,7 +125,8 @@ def get_resultpath():
 
 # 返回当前GIT工程提交代码的总人数
 def get_git_author_number():
-    return int(getpipoutput(['git shortlog -s -- **/* ', 'wc -l']))
+    #去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+    return int(getpipoutput(['git shortlog -s  ', 'wc -l']))
 
 
 # 返回当前GIT工程对应的当前分支编码
@@ -140,7 +142,9 @@ def get_git_branch(dir):
 def get_git_activity_authorlist(dir):
     os.chdir(dir)
     # 返回最近7天的提交邮箱,含今天
-    blist = getpipoutput(['git log --pretty=format:"%ce" --since=6.days'])
+    now = datetime.date.today()
+    blist = getpipoutput(['git log --pretty=format:"%%ce" --since=6.days --until=%s' % now])
+    print('************')
     print(blist)
     li = []
     if blist:
@@ -181,7 +185,8 @@ def get_git_changetime_onefile(dir, topn=19):
 
 # 获取某日累计代码量
 def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-%d')):
-    linesum = getpipoutput(['git log  --pretty=tformat: --numstat --until=%s -- **/*' % date, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
+    # 去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+    linesum = getpipoutput(['git log  --pretty=tformat: --numstat --until=%s ' % date, 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
     if not linesum:
         linesum = '0'
     return str(linesum).split('\n')[0]
@@ -192,7 +197,8 @@ def get_git_linechange_last_ndays(author, ndays=6):
     now = datetime.date.today()
     ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
     print('get_git_linechange_last_ndays author='+author)
-    num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --author="%s" -- **/*' % (ndaysago,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
+    # 去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+    num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author="%s" ' % (ndaysago,now,author), 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
 
     numL = num.split('\n')
     if not num:
@@ -261,7 +267,8 @@ def get_git_linechange_perdays(inputdays):
     for d in inputdays:
         begintime = d+' 00:00:00'
         endtime = d+' 23:59:59'
-        num = getpipoutput(['git log --pretty=tformat: --numstat --since="%s"  --until="%s"  -- **/* ' % (begintime, endtime),
+        # 去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since="%s"  --until="%s"   ' % (begintime, endtime),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
         if not num:
@@ -295,8 +302,8 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
 
     for sincedate in weekbegindates:
         untildate = datetime.datetime.strptime(sincedate, '%Y-%m-%d') + datetime.timedelta(days=6)
-
-        num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author="%s" -- **/*' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
+        # 去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+        num = getpipoutput(['git log --pretty=tformat: --numstat --since=%s --until=%s --author="%s" ' % (sincedate, untildate.strftime('%Y-%m-%d'), author_name),
                             'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
         numL = num.split('\n')
         if not num:
@@ -325,7 +332,8 @@ def get_git_linesum_oneauthor_since_nweek(author_name,weekbegindates):
 # 返回开发者代码量
 def get_git_linesum_oneauthor(author_name):
     # 查找开发者，注意由于author名字可能有空格，所以要加双引号2019-09-04
-    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author="%s" -- **/* ' %author_name , 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
+    # 去掉 -- **/* ，可能会导致查不到数据，但这样就不支持只查看某目录下的代码提交，只能整个工程来看了
+    linesum = getpipoutput(['git log  --pretty=tformat: --numstat  --author="%s"  ' %author_name , 'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { printf  loc }" '])
     if not linesum or int(linesum) <= 0:
         linesum = 0
     return int(linesum)
@@ -342,12 +350,18 @@ def git_fundauthors(paths):
     author_names = []
 
     for path in paths:
+        print(path)
         os.chdir(path)
-        # 查找开发者
-        output = getpipoutput(['git log --pretty=format:"%ce" -- **/*'])
+        # 查找开发者，注意最后要加上* ，否则会查找整个工程的提交者，而不是当前目录
+        output = getpipoutput(['git log --pretty=format:"%ce" *'])
         for line in output.split('\n'):
 
             author_name = line
+            print('工程开发者')
+            print(author_name)
+            if author_name =='':
+                print('开发者名称为空')
+                continue
             if author_name not in author_names:
                 author_names.append(author_name)
 
@@ -691,12 +705,16 @@ class GitDataCollector():
 
     # 形成图表
     def drawimg(self):
+        print('self.authors:')
+        print(self.authors)
         namelabels = readchinese(self.authors)
+        print(namelabels)
         img_piedata(namelabels, self.authorlines, '开发人员代码行数比例')
         img_cubedata_horizontal(namelabels, self.authorlines, '开发人员代码行数对比')
         if ISCOUNTCODE == 'Y':
             img_ploylinedata(self.last14days, self.last14days_num, 'GIT工程代码趋势图')
 
+        print(self.author_loc_last7days)
         img_cubedata_3bar(labels=namelabels,
                           values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
@@ -723,7 +741,8 @@ class GitDataCollector():
                            values1=self.author_adds_last7days,
                           values2=self.author_subs_last7days,
                           values3=self.author_loc_last7days,)
-            insertOrUpdateCommitData(namelabels,self.author_adds_last7days,self.author_subs_last7days,self.author_loc_last7days)
+
+        insertOrUpdateCommitData(namelabels,self.author_adds_last7days,self.author_subs_last7days,self.author_loc_last7days)
 
 
 def sendmsg(subject,receivers,attfolder):
