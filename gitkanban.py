@@ -143,7 +143,8 @@ def get_git_activity_authorlist(dir):
     os.chdir(dir)
     # 返回最近7天的提交邮箱,含今天
     now = datetime.date.today()
-    blist = getpipoutput(['git log --pretty=format:"%%ce" --since=6.days --until=%s' % now])
+    # 注意若往前拨会加上现在的时分秒，因此调整为7天
+    blist = getpipoutput(['git log --pretty=format:"%%ce" --since=7.days --until=%s' % now])
     print('************')
     print(blist)
     li = []
