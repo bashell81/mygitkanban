@@ -194,7 +194,7 @@ def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-
 
 
 # 获取某个开发者过去7天代码变动量
-def get_git_linechange_last_ndays(author, ndays=6):
+def get_git_linechange_last_ndays(author, ndays=7):
     now = datetime.date.today()
     ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
     print('get_git_linechange_last_ndays author='+author)
