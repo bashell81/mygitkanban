@@ -525,7 +525,7 @@ def gen_reporthtml(gitpaths,pull=True):
     for p in gitdata.gitpaths:
 
         title = '<p>工程路径:'+p +'</p>'
-        showMaxChangeFile = title +'<table><tr><td>文件路径</td><td>提交次数Top20</td></tr>'
+
         showpath += '  项目名称：' + pathAndNameDict[p] + ' ////代码路径：'+p
         showpath += '   ////当前统计分支：'+get_git_branch(p) + '<br>'
 
@@ -535,7 +535,8 @@ def gen_reporthtml(gitpaths,pull=True):
         else:
             showpath += '<div style="background:green">活跃提交者：' +strCommitters +  '</div><br>'
 
-        showMaxChangeFileAll = ''
+        #文件修改次数统计
+        showMaxChangeFile = title + '<table><tr><td>文件路径</td><td>提交次数Top20</td></tr>'
         if ISCOUNTCODE == 'Y':
             changedict = get_git_changetime_onefile(p)
             for key,value in changedict.items():
