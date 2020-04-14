@@ -844,17 +844,24 @@ PATH_RESULT = conf.get('path', 'PATH_RESULT')
 
 
 
-ISCOUNTCODE = ''
+
 try:
     mydict = conf.get('path', 'GROUP_NAMEDICT')
     print(mydict)
     GROUP_NAMEDICT = eval(mydict)
     print(GROUP_NAMEDICT)
+except BaseException as e:
+    print(e)
 
+ISCOUNTCODE = ''
+try:
     # 由于统计代码行数比较耗时，默认情况下不配置启用
     ISCOUNTCODE = conf.get('path', 'ISCOUNTCODE')
     if not ISCOUNTCODE:
         ISCOUNTCODE = 'N'
+
+    print('ISCOUNTCODE')
+    print(ISCOUNTCODE)
 except BaseException as e:
     print(e)
 
