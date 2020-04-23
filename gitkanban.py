@@ -18,6 +18,7 @@ from pandas import DataFrame
 import signal
 import time
 import pymysql
+import dbstore
 
 # 获取当前平台的操作系统类型
 ON_LINUX = (platform.system() == 'Linux')
@@ -38,6 +39,10 @@ DB_PORT = 3306
 DB_USER = 'kk_kanban'
 DB_PASSWORD = 'Hong2008+!'
 DB_DATABASE = 'kk_kanban'
+
+#返回当前git地址对应的仓库URL
+def getGitRemoteURL():
+    return getpipoutput(['git ls-remote --get-url'])
 
 # mysql 执行
 def insertOrUpdateCommitData(useridlist ,addlines,dellines,loclines,date=datetime.datetime.now().strftime('%Y-%m-%d')):
@@ -138,6 +143,23 @@ def get_git_branch(dir):
             return str(b)
 
 
+def get_git_activity_authorlist_ndays(dir,ndays=30):
+    os.chdir(dir)
+    now = datetime.date.today()
+    blist = getpipoutput(['git log --pretty=format:"%%ce" --since=%s.days --until=%s'  % (ndays,now)])
+    print('************')
+    print(blist)
+    li = []
+    if blist:
+        for b in blist.split('\n'):
+            li.append(b)
+        # 去重
+        uniqueli = list(set(readchinese(li)))
+        print(uniqueli)
+        return ','.join(uniqueli)
+    else:
+        return '无提交'
+
 # 返回最近7田提交者列表
 def get_git_activity_authorlist(dir):
     os.chdir(dir)
@@ -192,6 +214,33 @@ def get_git_linesum_until_somedate(date=datetime.datetime.now().strftime('%Y-%m-
         linesum = '0'
     return str(linesum).split('\n')[0]
 
+
+#获取工程过去30天代码变动量
+def get_git_projectlinechange_last_ndays(ndays=30):
+
+    now = datetime.date.today()
+    ndaysago = (now - datetime.timedelta(days=ndays)).strftime('%Y-%m-%d')
+    num = getpipoutput( ['git log --pretty=tformat: --numstat --since=%s --until=%s ' % (ndaysago, now),'awk "{ add += $1; subs += $2; loc += $1 - $2 } END { print add;print subs;print loc }" '])
+    numL = num.split('\n')
+    if not num:
+        numL = [0, 0, 0]
+
+    num_list = {}
+
+    if not numL[0]:
+        num_list['add'] = 0
+    else:
+        num_list['add'] = int(numL[0])
+    if not numL[1]:
+        num_list['sub'] = 0
+    else:
+        num_list['sub'] = int(numL[1])
+    if not numL[2]:
+        num_list['loc'] = 0
+    else:
+        num_list['loc'] = int(numL[2])
+
+    return num_list
 
 # 获取某个开发者过去7天代码变动量
 def get_git_linechange_last_ndays(author, ndays=7):
@@ -609,6 +658,8 @@ def filterdata4Two(keys,values1,values2):
     return r_keys, r_values1, r_values2
 
 
+
+
 # 去掉值全为0的开发者
 def filterzerodata4Three(keys,values1,values2,values3):
     r_keys = []
@@ -679,7 +730,24 @@ class GitDataCollector():
 
     #  数据收集
     def collect(self, dir):
+        # 更新工程更新数据库表
+        if IS_DB_STORE == 'Y':
+            remoteurl = getGitRemoteURL()
+            users = get_git_activity_authorlist_ndays(dir)
+            project_lines = get_git_projectlinechange_last_ndays()
+            curbranch = get_git_branch(dir)
+            dbstore.insertProjectUpdateInfo(remoteurl, project_lines['add'], project_lines['sub'], project_lines['loc'], users, curbranch)
+
+            # 7天数据
+            users = get_git_activity_authorlist_ndays(dir, 7)
+            project_lines = get_git_projectlinechange_last_ndays(7)
+            dbstore.insertProjectUpdateInfo(remoteurl, project_lines['add'], project_lines['sub'], project_lines['loc'],
+                                            users, curbranch,7)
+
+
         temp_adds, temp_subs, temp_locs = get_git_linechange_perdays(self.lastNdays)
+
+
         for i in range(config_code_lastNdays):
 
             self.lastNdays_linenum_add[i] += temp_adds[i]
